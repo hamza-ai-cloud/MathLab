@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { getBaseUrl } from '@/lib/utils/getBaseUrl';
 import type { User, Session } from '@supabase/supabase-js';
 
 /* ════════════════════════════════════
@@ -84,7 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${getBaseUrl()}/auth/callback`,
       },
     });
     if (error) {
