@@ -27,10 +27,20 @@ export async function POST(request: NextRequest) {
       success: true,
       data: response,
     });
-  } catch (error) {
-    console.error('Tutor API error:', error);
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Tutor API error:', errMsg);
+
+    // Surface helpful message for missing API key
+    if (errMsg.includes('GOOGLE_API_KEY')) {
+      return NextResponse.json(
+        { error: errMsg },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
-      { error: 'Failed to get tutor response' },
+      { error: 'Failed to get tutor response. ' + errMsg },
       { status: 500 }
     );
   }

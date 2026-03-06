@@ -29,10 +29,16 @@ export async function POST(request: NextRequest) {
       success: true,
       data: solution,
     });
-  } catch (error) {
-    console.error('Gemini API error:', error);
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Gemini API error:', errMsg);
+
+    if (errMsg.includes('GOOGLE_API_KEY')) {
+      return NextResponse.json({ error: errMsg }, { status: 503 });
+    }
+
     return NextResponse.json(
-      { error: 'Failed to solve problem' },
+      { error: 'Failed to solve problem. ' + errMsg },
       { status: 500 }
     );
   }

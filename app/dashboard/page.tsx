@@ -19,6 +19,7 @@ import {
   ChevronDown,
   Sparkles,
 } from 'lucide-react';
+import { saveToHistory } from '@/lib/supabase/history';
 
 /* ── Types ── */
 interface ChatMsg {
@@ -115,6 +116,22 @@ export default function DashboardPage() {
           : { steps: data.steps, answer: data.answer, summary: data.summary },
       };
       setMessages((prev) => [...prev, aiMsg]);
+
+      /* ── Persist to Supabase history (non-blocking) ── */
+      if (!data.isFollowUp && user) {
+        const title = text.length > 60 ? text.slice(0, 60) + '…' : text;
+        saveToHistory({
+          user_id: user.id,
+          title,
+          problem: text,
+          answer: data.answer || null,
+          summary: data.summary || null,
+          steps: data.steps || [],
+          topic: 'General',
+          has_file: !!extra?.fileName,
+          file_name: extra?.fileName || null,
+        }).catch(() => {}); // fire-and-forget
+      }
     } catch (err) {
       console.error('AI call failed:', err);
       setMessages((prev) => [
@@ -124,7 +141,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [buildHistory]);
+  }, [buildHistory, user]);
 
   /* ── Submit ── */
   const handleSubmit = useCallback(async () => {

@@ -1,6 +1,4 @@
-import { GoogleGenerativeAI, Content } from '@google/generative-ai';
-
-const client = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
+import { GoogleGenerativeAI, Content, GenerativeModel } from '@google/generative-ai';
 
 export interface TutorMessage {
   role: 'user' | 'model';
@@ -9,9 +7,23 @@ export interface TutorMessage {
 }
 
 export class GeminiService {
-  private static model = client.getGenerativeModel({
-    model: 'gemini-2.0-flash',
-  });
+  private static _model: GenerativeModel | null = null;
+
+  /** Lazy-init: read GOOGLE_API_KEY at call-time, not module-load time */
+  private static getModel(): GenerativeModel {
+    if (this._model) return this._model;
+
+    const apiKey = process.env.GOOGLE_API_KEY;
+    if (!apiKey || apiKey === 'your_google_api_key') {
+      throw new Error(
+        'GOOGLE_API_KEY is not configured. Set it in your Vercel Environment Variables (Settings → Environment Variables) or in .env.local for local dev.',
+      );
+    }
+
+    const client = new GoogleGenerativeAI(apiKey);
+    this._model = client.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    return this._model;
+  }
 
   /**
    * System prompt that frames Gemini as an interactive math tutor
@@ -67,7 +79,7 @@ If the student is asking a follow-up doubt (not a new problem), respond with:
       }));
 
       // Start chat with system context baked into history
-      const chat = this.model.startChat({
+      const chat = this.getModel().startChat({
         history: [
           { role: 'user', parts: [{ text: this.TUTOR_SYSTEM }] },
           { role: 'model', parts: [{ text: 'Understood! I am MathLab AI Tutor. I will follow all the rules. Ready to help!' }] },
@@ -129,7 +141,7 @@ If the student is asking a follow-up doubt (not a new problem), respond with:
       const imageData = await this.fileToBase64(imageFile);
       const base64Image = imageData.split(',')[1];
 
-      const result = await this.model.generateContent([
+      const result = await this.getModel().generateContent([
         {
           inlineData: {
             mimeType: imageFile.type,

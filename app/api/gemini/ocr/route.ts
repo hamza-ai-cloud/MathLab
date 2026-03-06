@@ -29,10 +29,16 @@ export async function POST(request: NextRequest) {
       success: true,
       text: extractedText,
     });
-  } catch (error) {
-    console.error('OCR error:', error);
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('OCR error:', errMsg);
+
+    if (errMsg.includes('GOOGLE_API_KEY')) {
+      return NextResponse.json({ error: errMsg }, { status: 503 });
+    }
+
     return NextResponse.json(
-      { error: 'Failed to extract text from image' },
+      { error: 'Failed to extract text from image. ' + errMsg },
       { status: 500 }
     );
   }
