@@ -23,6 +23,7 @@ interface AuthContextValue {
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<{ error?: string }>;
   signUpWithEmail: (email: string, password: string, fullName: string) => Promise<{ error?: string }>;
+  resetPassword: (email: string) => Promise<{ error?: string }>;
   logout: () => Promise<void>;
 }
 
@@ -33,6 +34,7 @@ const AuthContext = createContext<AuthContextValue>({
   signInWithGoogle: async () => {},
   signInWithEmail: async () => ({}),
   signUpWithEmail: async () => ({}),
+  resetPassword: async () => ({}),
   logout: async () => {},
 });
 
@@ -107,13 +109,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /* ── Sign up with Email + Password + Name ── */
   const signUpWithEmail = useCallback(async (email: string, password: string, fullName: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: { full_name: fullName },
         emailRedirectTo: `${getBaseUrl()}/auth/callback`,
       },
+    });
+    if (error) {
+      // Map common Supabase error messages to friendly text
+      if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already been registered')) {
+        return { error: 'This email is already registered. Please sign in instead.' };
+      }
+      return { error: error.message };
+    }
+    // Supabase may return a user with no identities if the email already exists (no error thrown)
+    if (data?.user && data.user.identities && data.user.identities.length === 0) {
+      return { error: 'This email is already registered. Please sign in instead.' };
+    }
+    return {};
+  }, [supabase]);
+
+  /* ── Reset password via email ── */
+  const resetPassword = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${getBaseUrl()}/auth/callback`,
     });
     if (error) return { error: error.message };
     return {};
@@ -129,7 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isLoggedIn = !!user;
 
   return (
-    <AuthContext.Provider value={{ isLoggedIn, user, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, logout }}>
+    <AuthContext.Provider value={{ isLoggedIn, user, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, logout }}>
       {children}
     </AuthContext.Provider>
   );
