@@ -169,7 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       password,
       options: {
         data: { full_name: fullName },
-        emailRedirectTo: `${getBaseUrl()}/auth/callback`,
+        emailRedirectTo: `${getBaseUrl()}/auth/confirm`,
       },
     });
 
@@ -198,7 +198,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resetPassword = useCallback(async (email: string): Promise<AuthResult> => {
     console.log('[MathLab Auth] Sending password reset email to:', email);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${getBaseUrl()}/auth/callback?next=/dashboard/settings`,
+      redirectTo: `${getBaseUrl()}/auth/confirm?type=recovery`,
     });
     if (error) {
       console.error('[MathLab Auth] resetPasswordForEmail error:', {
@@ -218,7 +218,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       type: 'signup',
       email,
       options: {
-        emailRedirectTo: `${getBaseUrl()}/auth/callback`,
+        emailRedirectTo: `${getBaseUrl()}/auth/confirm`,
       },
     });
     if (error) {

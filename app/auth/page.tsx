@@ -59,6 +59,13 @@ function AuthPageContent() {
     if (errorParam === 'auth_callback_failed') {
       setError('Authentication failed. Please try again.');
     }
+    if (errorParam === 'recovery_link_expired') {
+      setError('Your password reset link has expired or was already used. Please request a new one.');
+      setMode('forgot');
+    }
+    if (errorParam === 'confirmation_link_expired') {
+      setError('Your confirmation link has expired. Please sign up again or request a new link.');
+    }
     if (messageParam === 'password_updated') {
       setSuccess('Password updated successfully! You can now sign in.');
     }
