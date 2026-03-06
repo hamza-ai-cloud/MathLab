@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -33,9 +33,10 @@ const floatingIcons = [
   { Icon: Sigma, x: '50%', y: '88%', size: 20, delay: 0.8 },
 ];
 
-export default function AuthPage() {
-  const { signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword } = useAuth();
+function AuthPageContent() {
+  const { signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, resendConfirmation } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login');
   const [fullName, setFullName] = useState('');
@@ -48,10 +49,25 @@ export default function AuthPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showResend, setShowResend] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+
+  /* ── Handle error/success from callback redirect ── */
+  useEffect(() => {
+    const errorParam = searchParams.get('error');
+    const messageParam = searchParams.get('message');
+    if (errorParam === 'auth_callback_failed') {
+      setError('Authentication failed. Please try again.');
+    }
+    if (messageParam === 'password_updated') {
+      setSuccess('Password updated successfully! You can now sign in.');
+    }
+  }, [searchParams]);
 
   const resetForm = () => {
     setError('');
     setSuccess('');
+    setShowResend(false);
   };
 
   const toggleMode = () => {
@@ -134,6 +150,10 @@ export default function AuthPage() {
       const res = await signInWithEmail(email.trim(), password);
       if (res.error) {
         setError(res.error);
+        // Show the resend confirmation button if email is not confirmed
+        if (res.code === 'email_not_confirmed') {
+          setShowResend(true);
+        }
       } else {
         router.push('/dashboard');
       }
@@ -227,10 +247,42 @@ export default function AuthPage() {
                   initial={{ opacity: 0, y: -8, height: 0 }}
                   animate={{ opacity: 1, y: 0, height: 'auto' }}
                   exit={{ opacity: 0, y: -8, height: 0 }}
-                  className="flex items-start gap-2.5 px-4 py-3 rounded-xl text-[13px] text-red-300 bg-red-500/10 border border-red-500/20 leading-snug"
+                  className="rounded-xl text-[13px] text-red-300 bg-red-500/10 border border-red-500/20 leading-snug"
                 >
-                  <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-                  <span>{error}</span>
+                  <div className="flex items-start gap-2.5 px-4 py-3">
+                    <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+                    <span>{error}</span>
+                  </div>
+                  {/* Resend confirmation email button */}
+                  {showResend && (
+                    <div className="px-4 pb-3">
+                      <button
+                        type="button"
+                        disabled={resendLoading}
+                        onClick={async () => {
+                          setResendLoading(true);
+                          const res = await resendConfirmation(email.trim());
+                          if (res.error) {
+                            setError(res.error);
+                            setShowResend(false);
+                          } else {
+                            setError('');
+                            setShowResend(false);
+                            setSuccess('Confirmation email resent! Please check your inbox.');
+                          }
+                          setResendLoading(false);
+                        }}
+                        className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-[12px] font-medium text-red-200 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 transition-all disabled:opacity-50"
+                      >
+                        {resendLoading ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Mail size={12} />
+                        )}
+                        <span>{resendLoading ? 'Sending…' : 'Resend Confirmation Email'}</span>
+                      </button>
+                    </div>
+                  )}
                 </motion.div>
               )}
               {success && (
@@ -483,5 +535,13 @@ export default function AuthPage() {
         </p>
       </motion.div>
     </div>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense>
+      <AuthPageContent />
+    </Suspense>
   );
 }

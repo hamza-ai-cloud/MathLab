@@ -1,13 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, Suspense } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { DashboardHeader } from '@/components/layout/DashboardHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/context/AuthContext';
+import { createClient } from '@/lib/supabase/client';
 import {
   User,
   Mail,
@@ -32,14 +33,29 @@ import {
   Zap,
   BookOpen,
   Check,
+  Lock,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 
 /* ═══════════════════════════════════════════════════
    Settings Page — Profile, Preferences, Account
    ═══════════════════════════════════════════════════ */
-export default function SettingsPage() {
+function SettingsPageContent() {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  /* ── Password reset state ── */
+  const isPasswordReset = searchParams.get('password_reset') === 'true';
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [showPasswordSection, setShowPasswordSection] = useState(isPasswordReset);
 
   /* ── Local preference state (mock — persist to Supabase later) ── */
   const [theme, setTheme] = useState<'dark' | 'light' | 'system'>('dark');
@@ -157,6 +173,181 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
+          </Card>
+        </motion.div>
+
+        {/* ══════════════════════════════════════
+           SECTION 1.5 — Change Password
+           ══════════════════════════════════════ */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.07 }}
+        >
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Lock size={16} className="text-amber-400" />
+                <h2 className="text-lg font-bold text-white">Password</h2>
+                {isPasswordReset && (
+                  <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/20">
+                    Action Required
+                  </span>
+                )}
+              </div>
+              {!showPasswordSection && (
+                <button
+                  onClick={() => setShowPasswordSection(true)}
+                  className="text-xs text-electric-light hover:text-white transition font-medium"
+                >
+                  Change Password
+                </button>
+              )}
+            </div>
+
+            <AnimatePresence>
+              {showPasswordSection && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  {isPasswordReset && (
+                    <p className="text-sm text-amber-300/80 mb-4">
+                      You arrived here from a password reset link. Please set your new password below.
+                    </p>
+                  )}
+
+                  <AnimatePresence mode="wait">
+                    {passwordError && (
+                      <motion.div
+                        key="pw-error"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] text-red-300 bg-red-500/10 border border-red-500/20 mb-3"
+                      >
+                        <AlertCircle size={13} />
+                        <span>{passwordError}</span>
+                      </motion.div>
+                    )}
+                    {passwordSuccess && (
+                      <motion.div
+                        key="pw-success"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 mb-3"
+                      >
+                        <CheckCircle2 size={13} />
+                        <span>{passwordSuccess}</span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs text-slate-500 uppercase tracking-wider mb-1 block">New Password</label>
+                      <div className="relative">
+                        <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <input
+                          type={showNewPassword ? 'text' : 'password'}
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="Enter new password (min 6 characters)"
+                          className="w-full pl-9 pr-10 py-2.5 rounded-xl text-sm text-white placeholder-slate-600 bg-white/[0.03] border border-white/[0.08] focus:border-electric/40 focus:ring-1 focus:ring-electric/20 outline-none transition"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition"
+                        >
+                          {showNewPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-slate-500 uppercase tracking-wider mb-1 block">Confirm New Password</label>
+                      <input
+                        type={showNewPassword ? 'text' : 'password'}
+                        value={confirmNewPassword}
+                        onChange={(e) => setConfirmNewPassword(e.target.value)}
+                        placeholder="Confirm new password"
+                        className={`w-full pl-4 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-slate-600 bg-white/[0.03] border outline-none transition ${
+                          confirmNewPassword.length > 0 && newPassword !== confirmNewPassword
+                            ? 'border-red-500/50'
+                            : confirmNewPassword.length > 0 && newPassword === confirmNewPassword
+                              ? 'border-emerald-500/40'
+                              : 'border-white/[0.08] focus:border-electric/40 focus:ring-1 focus:ring-electric/20'
+                        }`}
+                      />
+                    </div>
+
+                    <div className="flex gap-3 pt-1">
+                      <button
+                        disabled={passwordLoading || newPassword.length < 6 || newPassword !== confirmNewPassword}
+                        onClick={async () => {
+                          setPasswordError('');
+                          setPasswordSuccess('');
+                          setPasswordLoading(true);
+                          try {
+                            const supabase = createClient();
+                            const { error } = await supabase.auth.updateUser({ password: newPassword });
+                            if (error) {
+                              console.error('[MathLab Auth] updateUser password error:', error.message);
+                              setPasswordError(error.message);
+                            } else {
+                              console.log('[MathLab Auth] Password updated successfully');
+                              setPasswordSuccess('Password updated successfully!');
+                              setNewPassword('');
+                              setConfirmNewPassword('');
+                              // Remove the query param without reload
+                              if (isPasswordReset) {
+                                window.history.replaceState({}, '', '/dashboard/settings');
+                              }
+                            }
+                          } catch (err) {
+                            console.error('[MathLab Auth] Unexpected error updating password:', err);
+                            setPasswordError('Something went wrong. Please try again.');
+                          }
+                          setPasswordLoading(false);
+                        }}
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                        style={{
+                          background: (passwordLoading || newPassword.length < 6 || newPassword !== confirmNewPassword)
+                            ? 'rgba(108,99,255,0.25)'
+                            : 'linear-gradient(135deg, #3b82f6, #6C63FF, #8b5cf6)',
+                          boxShadow: (passwordLoading || newPassword.length < 6 || newPassword !== confirmNewPassword)
+                            ? 'none'
+                            : '0 0 20px rgba(108,99,255,0.2)',
+                        }}
+                      >
+                        {passwordLoading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                        {passwordLoading ? 'Updating…' : 'Update Password'}
+                      </button>
+
+                      {!isPasswordReset && (
+                        <button
+                          onClick={() => {
+                            setShowPasswordSection(false);
+                            setNewPassword('');
+                            setConfirmNewPassword('');
+                            setPasswordError('');
+                            setPasswordSuccess('');
+                          }}
+                          className="px-4 py-2.5 rounded-xl text-sm text-slate-400 hover:text-white transition"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </Card>
         </motion.div>
 
@@ -465,5 +656,13 @@ function SettingToggle({
         />
       </motion.button>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense>
+      <SettingsPageContent />
+    </Suspense>
   );
 }

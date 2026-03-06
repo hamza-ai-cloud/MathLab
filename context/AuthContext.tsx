@@ -16,14 +16,20 @@ interface AuthUser {
   avatar?: string;
 }
 
+interface AuthResult {
+  error?: string;
+  code?: 'email_not_confirmed' | 'invalid_credentials' | 'user_not_found' | 'already_registered' | 'unknown';
+}
+
 interface AuthContextValue {
   isLoggedIn: boolean;
   user: AuthUser | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
-  signInWithEmail: (email: string, password: string) => Promise<{ error?: string }>;
-  signUpWithEmail: (email: string, password: string, fullName: string) => Promise<{ error?: string }>;
-  resetPassword: (email: string) => Promise<{ error?: string }>;
+  signInWithEmail: (email: string, password: string) => Promise<AuthResult>;
+  signUpWithEmail: (email: string, password: string, fullName: string) => Promise<AuthResult>;
+  resetPassword: (email: string) => Promise<AuthResult>;
+  resendConfirmation: (email: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
 }
 
@@ -35,6 +41,7 @@ const AuthContext = createContext<AuthContextValue>({
   signInWithEmail: async () => ({}),
   signUpWithEmail: async () => ({}),
   resetPassword: async () => ({}),
+  resendConfirmation: async () => ({}),
   logout: async () => {},
 });
 
@@ -101,14 +108,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase]);
 
   /* ── Sign in with Email + Password ── */
-  const signInWithEmail = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { error: error.message };
+  const signInWithEmail = useCallback(async (email: string, password: string): Promise<AuthResult> => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      // Debug log — always print the raw Supabase error so we can diagnose
+      console.error('[MathLab Auth] signInWithPassword error:', {
+        message: error.message,
+        status: error.status,
+        name: error.name,
+      });
+
+      const msg = error.message.toLowerCase();
+
+      // Supabase returns "Email not confirmed" when the account exists but hasn't been verified
+      if (msg.includes('email not confirmed') || msg.includes('not confirmed')) {
+        return {
+          error: 'Your email is not confirmed yet. Please check your inbox for the confirmation link, or click "Resend" below.',
+          code: 'email_not_confirmed',
+        };
+      }
+
+      // "Invalid login credentials" is Supabase's catch-all for wrong email OR wrong password
+      if (msg.includes('invalid login credentials') || msg.includes('invalid credentials')) {
+        // Try a no-op signUp to see if the email exists at all
+        const { data: probe } = await supabase.auth.signUp({
+          email,
+          password: '__probe_only_never_match__',
+          options: { data: { _probe: true } },
+        });
+
+        // If identities is empty, the user exists — so it's a wrong password
+        if (probe?.user?.identities && probe.user.identities.length === 0) {
+          console.error('[MathLab Auth] User exists but password is wrong');
+          return {
+            error: 'Incorrect password. Please try again or use "Forgot Password?" to reset it.',
+            code: 'invalid_credentials',
+          };
+        }
+
+        // Otherwise the user doesn't exist
+        console.error('[MathLab Auth] No account found for this email');
+        return {
+          error: 'No account found with this email. Please sign up first.',
+          code: 'user_not_found',
+        };
+      }
+
+      return { error: error.message, code: 'unknown' };
+    }
+
+    console.log('[MathLab Auth] Sign-in successful for:', data.user?.email);
     return {};
   }, [supabase]);
 
   /* ── Sign up with Email + Password + Name ── */
-  const signUpWithEmail = useCallback(async (email: string, password: string, fullName: string) => {
+  const signUpWithEmail = useCallback(async (email: string, password: string, fullName: string): Promise<AuthResult> => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -117,26 +172,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         emailRedirectTo: `${getBaseUrl()}/auth/callback`,
       },
     });
+
     if (error) {
-      // Map common Supabase error messages to friendly text
+      console.error('[MathLab Auth] signUp error:', {
+        message: error.message,
+        status: error.status,
+      });
       if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already been registered')) {
-        return { error: 'This email is already registered. Please sign in instead.' };
+        return { error: 'This email is already registered. Please sign in instead.', code: 'already_registered' };
       }
-      return { error: error.message };
+      return { error: error.message, code: 'unknown' };
     }
+
     // Supabase may return a user with no identities if the email already exists (no error thrown)
     if (data?.user && data.user.identities && data.user.identities.length === 0) {
-      return { error: 'This email is already registered. Please sign in instead.' };
+      console.warn('[MathLab Auth] signUp returned user with 0 identities — email already exists');
+      return { error: 'This email is already registered. Please sign in instead.', code: 'already_registered' };
     }
+
+    console.log('[MathLab Auth] Sign-up successful, confirmation email sent to:', email);
     return {};
   }, [supabase]);
 
   /* ── Reset password via email ── */
-  const resetPassword = useCallback(async (email: string) => {
+  const resetPassword = useCallback(async (email: string): Promise<AuthResult> => {
+    console.log('[MathLab Auth] Sending password reset email to:', email);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${getBaseUrl()}/auth/callback`,
+      redirectTo: `${getBaseUrl()}/auth/callback?next=/dashboard/settings`,
     });
-    if (error) return { error: error.message };
+    if (error) {
+      console.error('[MathLab Auth] resetPasswordForEmail error:', {
+        message: error.message,
+        status: error.status,
+      });
+      return { error: error.message, code: 'unknown' };
+    }
+    console.log('[MathLab Auth] Password reset email sent successfully');
+    return {};
+  }, [supabase]);
+
+  /* ── Resend confirmation email ── */
+  const resendConfirmation = useCallback(async (email: string): Promise<AuthResult> => {
+    console.log('[MathLab Auth] Resending confirmation email to:', email);
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+      options: {
+        emailRedirectTo: `${getBaseUrl()}/auth/callback`,
+      },
+    });
+    if (error) {
+      console.error('[MathLab Auth] resend confirmation error:', {
+        message: error.message,
+        status: error.status,
+      });
+      return { error: error.message, code: 'unknown' };
+    }
+    console.log('[MathLab Auth] Confirmation email resent successfully');
     return {};
   }, [supabase]);
 
@@ -150,7 +242,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isLoggedIn = !!user;
 
   return (
-    <AuthContext.Provider value={{ isLoggedIn, user, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, logout }}>
+    <AuthContext.Provider value={{ isLoggedIn, user, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, resendConfirmation, logout }}>
       {children}
     </AuthContext.Provider>
   );
