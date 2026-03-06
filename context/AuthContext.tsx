@@ -6,7 +6,7 @@ import { getBaseUrl } from '@/lib/utils/getBaseUrl';
 import type { User, Session } from '@supabase/supabase-js';
 
 /* ════════════════════════════════════
-   Auth Context — Supabase OAuth
+   Auth Context — Supabase (Email + OAuth)
    ════════════════════════════════════ */
 
 interface AuthUser {
@@ -21,6 +21,8 @@ interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<{ error?: string }>;
+  signUpWithEmail: (email: string, password: string, fullName: string) => Promise<{ error?: string }>;
   logout: () => Promise<void>;
 }
 
@@ -29,6 +31,8 @@ const AuthContext = createContext<AuthContextValue>({
   user: null,
   loading: true,
   signInWithGoogle: async () => {},
+  signInWithEmail: async () => ({}),
+  signUpWithEmail: async () => ({}),
   logout: async () => {},
 });
 
@@ -86,6 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       provider: 'google',
       options: {
         redirectTo: `${getBaseUrl()}/auth/callback`,
+        queryParams: { prompt: 'select_account' },
       },
     });
     if (error) {
@@ -93,16 +98,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [supabase]);
 
-  /* ── Logout ── */
+  /* ── Sign in with Email + Password ── */
+  const signInWithEmail = useCallback(async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error: error.message };
+    return {};
+  }, [supabase]);
+
+  /* ── Sign up with Email + Password + Name ── */
+  const signUpWithEmail = useCallback(async (email: string, password: string, fullName: string) => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: fullName },
+        emailRedirectTo: `${getBaseUrl()}/auth/callback`,
+      },
+    });
+    if (error) return { error: error.message };
+    return {};
+  }, [supabase]);
+
+  /* ── Logout — clear session and force redirect to home ── */
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null);
+    window.location.href = '/';
   }, [supabase]);
 
   const isLoggedIn = !!user;
 
   return (
-    <AuthContext.Provider value={{ isLoggedIn, user, loading, signInWithGoogle, logout }}>
+    <AuthContext.Provider value={{ isLoggedIn, user, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, logout }}>
       {children}
     </AuthContext.Provider>
   );

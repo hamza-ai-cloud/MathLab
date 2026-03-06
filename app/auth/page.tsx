@@ -2,49 +2,115 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Button } from '@/components/ui/Button';
+import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import {
   Brain,
-  ArrowRight,
-  Sparkles,
+  Mail,
+  Lock,
+  User,
+  Eye,
+  EyeOff,
+  Loader2,
   Sigma,
   Pi,
   Divide,
   Plus,
   X,
-  Loader2,
+  ArrowRight,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 
 const floatingIcons = [
-  { Icon: Sigma, x: '10%', y: '15%', size: 32, delay: 0 },
-  { Icon: Pi, x: '85%', y: '20%', size: 28, delay: 0.5 },
-  { Icon: Divide, x: '75%', y: '75%', size: 24, delay: 1 },
-  { Icon: Plus, x: '15%', y: '70%', size: 26, delay: 1.5 },
-  { Icon: X, x: '90%', y: '50%', size: 20, delay: 2 },
-  { Icon: Sigma, x: '50%', y: '85%', size: 22, delay: 0.8 },
+  { Icon: Sigma, x: '10%', y: '15%', size: 30, delay: 0 },
+  { Icon: Pi, x: '87%', y: '18%', size: 26, delay: 0.5 },
+  { Icon: Divide, x: '78%', y: '78%', size: 22, delay: 1 },
+  { Icon: Plus, x: '12%', y: '72%', size: 24, delay: 1.5 },
+  { Icon: X, x: '92%', y: '50%', size: 18, delay: 2 },
+  { Icon: Sigma, x: '50%', y: '88%', size: 20, delay: 0.8 },
 ];
 
 export default function AuthPage() {
-  const { signInWithGoogle } = useAuth();
-  const [signingIn, setSigningIn] = useState(false);
+  const { signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
+  const router = useRouter();
 
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const resetForm = () => {
+    setError('');
+    setSuccess('');
+  };
+
+  const toggleMode = () => {
+    setMode(mode === 'login' ? 'signup' : 'login');
+    resetForm();
+  };
+
+  /* ── Email form submit ── */
+  const handleEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    resetForm();
+
+    if (!email.trim() || !password.trim()) {
+      setError('Please fill in all fields.');
+      return;
+    }
+    if (mode === 'signup' && !fullName.trim()) {
+      setError('Please enter your full name.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+
+    setLoading(true);
+
+    if (mode === 'signup') {
+      const res = await signUpWithEmail(email.trim(), password, fullName.trim());
+      if (res.error) {
+        setError(res.error);
+      } else {
+        setSuccess('Account created! Check your email to confirm, then log in.');
+        setMode('login');
+        setPassword('');
+      }
+    } else {
+      const res = await signInWithEmail(email.trim(), password);
+      if (res.error) {
+        setError(res.error);
+      } else {
+        router.push('/dashboard');
+      }
+    }
+    setLoading(false);
+  };
+
+  /* ── Google sign-in ── */
   const handleGoogleLogin = async () => {
-    setSigningIn(true);
+    setGoogleLoading(true);
+    resetForm();
     try {
       await signInWithGoogle();
     } catch {
-      setSigningIn(false);
+      setGoogleLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-deep relative flex items-center justify-center px-4 py-16 overflow-hidden">
+    <div className="min-h-screen bg-deep relative flex items-center justify-center px-4 py-12 overflow-hidden">
       {/* Mesh gradient */}
       <div className="mesh-gradient" />
-
-      {/* Grid paper */}
       <div className="absolute inset-0 grid-paper opacity-10" />
 
       {/* Floating math icons */}
@@ -53,16 +119,8 @@ export default function AuthPage() {
           key={i}
           className="absolute text-white/[0.04] pointer-events-none"
           style={{ left: x, top: y }}
-          animate={{
-            y: [0, -20, 0],
-            rotate: [0, 15, -15, 0],
-          }}
-          transition={{
-            duration: 6 + i,
-            repeat: Infinity,
-            delay,
-            ease: 'easeInOut',
-          }}
+          animate={{ y: [0, -18, 0], rotate: [0, 12, -12, 0] }}
+          transition={{ duration: 6 + i, repeat: Infinity, delay, ease: 'easeInOut' }}
         >
           <Icon size={size} />
         </motion.div>
@@ -72,99 +130,181 @@ export default function AuthPage() {
       <div className="absolute top-1/4 left-1/4 w-72 h-72 rounded-full bg-electric/8 blur-[120px]" />
       <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full bg-violet/8 blur-[120px]" />
 
-      {/* Auth card */}
+      {/* ═══ Auth Card ═══ */}
       <motion.div
-        initial={{ opacity: 0, y: 40, rotateX: -10 }}
-        animate={{ opacity: 1, y: 0, rotateX: 0 }}
-        transition={{ duration: 0.7, type: 'spring', stiffness: 100 }}
-        className="relative w-full max-w-md"
-        style={{ perspective: '1200px' }}
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
+        className="relative w-full max-w-md z-10"
       >
-        <div className="glass-card rounded-3xl border border-white/10 shadow-depth overflow-hidden">
-          {/* Top brand section */}
-          <div className="relative px-8 pt-10 pb-6 text-center">
+        <div
+          className="rounded-3xl overflow-hidden"
+          style={{
+            background: 'linear-gradient(145deg, rgba(15,12,30,0.95) 0%, rgba(10,8,22,0.98) 100%)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            boxShadow: '0 0 80px rgba(108,99,255,0.08), 0 25px 60px rgba(0,0,0,0.5)',
+          }}
+        >
+          {/* ── Brand header ── */}
+          <div className="px-8 pt-8 pb-4 text-center">
             <motion.div
-              className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-electric to-violet shadow-glow mb-5"
+              className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-electric to-violet shadow-glow mb-4"
               whileHover={{ rotate: 15, scale: 1.1 }}
               transition={{ type: 'spring', stiffness: 300 }}
             >
-              <Brain className="w-8 h-8 text-white" />
+              <Brain className="w-7 h-7 text-white" />
             </motion.div>
-
             <h1 className="text-2xl font-bold text-white mb-1">
-              Welcome to MathLab
+              {mode === 'login' ? 'Welcome Back' : 'Create Account'}
             </h1>
             <p className="text-sm text-slate-400">
-              Sign in with your Google account to get started
+              {mode === 'login'
+                ? 'Sign in to continue to MathLab'
+                : 'Sign up to start solving math with AI'}
             </p>
           </div>
 
-          {/* Google sign-in button */}
-          <div className="px-8 pb-6">
+          {/* ── Form ── */}
+          <form onSubmit={handleEmailSubmit} className="px-8 pb-2 space-y-3">
+            {/* Error / Success messages */}
+            {error && (
+              <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs text-red-300 bg-red-500/10 border border-red-500/20">
+                <AlertCircle size={14} className="flex-shrink-0" /> {error}
+              </motion.div>
+            )}
+            {success && (
+              <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20">
+                <CheckCircle2 size={14} className="flex-shrink-0" /> {success}
+              </motion.div>
+            )}
+
+            {/* Full Name (sign-up only) */}
+            {mode === 'signup' && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
+                <label className="block text-[11px] text-slate-400 uppercase tracking-wider font-medium mb-1.5">Full Name</label>
+                <div className="relative">
+                  <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Hamza Mumtaz"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-slate-600 bg-white/[0.03] border border-white/[0.08] focus:border-electric/40 focus:ring-1 focus:ring-electric/20 outline-none transition"
+                  />
+                </div>
+              </motion.div>
+            )}
+
+            {/* Email */}
+            <div>
+              <label className="block text-[11px] text-slate-400 uppercase tracking-wider font-medium mb-1.5">Email</label>
+              <div className="relative">
+                <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-slate-600 bg-white/[0.03] border border-white/[0.08] focus:border-electric/40 focus:ring-1 focus:ring-electric/20 outline-none transition"
+                />
+              </div>
+            </div>
+
+            {/* Password */}
+            <div>
+              <label className="block text-[11px] text-slate-400 uppercase tracking-wider font-medium mb-1.5">Password</label>
+              <div className="relative">
+                <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-10 pr-11 py-2.5 rounded-xl text-sm text-white placeholder-slate-600 bg-white/[0.03] border border-white/[0.08] focus:border-electric/40 focus:ring-1 focus:ring-electric/20 outline-none transition"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition"
+                >
+                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Submit button */}
             <motion.button
-              whileHover={{ scale: 1.02, y: -1 }}
+              type="submit"
+              disabled={loading}
+              whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.98 }}
-              disabled={signingIn}
-              className="w-full flex items-center justify-center gap-3 py-3.5 rounded-xl glass border border-white/10 hover:border-white/20 transition-all text-white font-medium text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-              onClick={handleGoogleLogin}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-50 transition-all mt-1"
+              style={{
+                background: 'linear-gradient(135deg, #3b82f6, #6C63FF, #8b5cf6)',
+                boxShadow: '0 0 24px rgba(108,99,255,0.25)',
+              }}
             >
-              {signingIn ? (
-                <Loader2 size={20} className="animate-spin" />
+              {loading ? (
+                <Loader2 size={16} className="animate-spin" />
               ) : (
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
-                  <path
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-                    fill="#4285F4"
-                  />
-                  <path
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    fill="#34A853"
-                  />
-                  <path
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                    fill="#FBBC05"
-                  />
-                  <path
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                    fill="#EA4335"
-                  />
+                <>
+                  {mode === 'login' ? 'Sign In' : 'Create Account'}
+                  <ArrowRight size={14} />
+                </>
+              )}
+            </motion.button>
+          </form>
+
+          {/* ── Divider ── */}
+          <div className="px-8 py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-white/[0.06]" />
+              <span className="text-[10px] text-slate-500 uppercase tracking-wider">or</span>
+              <div className="flex-1 h-px bg-white/[0.06]" />
+            </div>
+          </div>
+
+          {/* ── Google button ── */}
+          <div className="px-8 pb-5">
+            <motion.button
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
+              disabled={googleLoading}
+              onClick={handleGoogleLogin}
+              className="w-full flex items-center justify-center gap-3 py-3 rounded-xl text-sm text-white font-medium disabled:opacity-50 transition-all"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
+              {googleLoading ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <svg className="w-4.5 h-4.5" viewBox="0 0 24 24">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                 </svg>
               )}
-              {signingIn ? 'Redirecting to Google…' : 'Continue with Google'}
+              {googleLoading ? 'Redirecting…' : 'Continue with Google'}
             </motion.button>
           </div>
 
-          {/* Features preview */}
-          <div className="px-8 pb-8 pt-2">
-            <div className="border-t border-white/5 pt-6">
-              <p className="text-xs text-slate-500 uppercase tracking-wider mb-4 text-center">What you get</p>
-              <div className="space-y-3">
-                {[
-                  { icon: '✨', text: 'AI-powered step-by-step math solutions' },
-                  { icon: '📸', text: 'Upload photos of homework problems' },
-                  { icon: '💬', text: 'Ask follow-up doubts in Roman Urdu' },
-                  { icon: '🚀', text: '10 free problems every day' },
-                ].map((item) => (
-                  <div key={item.text} className="flex items-center gap-3 text-sm text-slate-400">
-                    <span className="text-base">{item.icon}</span>
-                    {item.text}
-                  </div>
-                ))}
-              </div>
-            </div>
+          {/* ── Toggle login/signup ── */}
+          <div className="px-8 pb-7 text-center">
+            <p className="text-xs text-slate-500">
+              {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
+              <button onClick={toggleMode} className="text-electric-light hover:text-white font-medium transition">
+                {mode === 'login' ? 'Sign Up' : 'Sign In'}
+              </button>
+            </p>
           </div>
         </div>
 
         {/* Bottom note */}
-        <p className="text-center text-xs text-slate-600 mt-6">
+        <p className="text-center text-[10px] text-slate-600 mt-5">
           By continuing, you agree to MathLab&apos;s{' '}
-          <Link href="/terms" className="text-slate-400 hover:text-white transition">
-            Terms
-          </Link>{' '}
+          <Link href="/terms" className="text-slate-500 hover:text-white transition">Terms</Link>{' '}
           &{' '}
-          <Link href="/privacy" className="text-slate-400 hover:text-white transition">
-            Privacy Policy
-          </Link>
+          <Link href="/privacy" className="text-slate-500 hover:text-white transition">Privacy Policy</Link>
         </p>
       </motion.div>
     </div>
