@@ -30,7 +30,7 @@ const timeline = [
     year: '2024',
     title: 'Building MathLab',
     description:
-      'We combined Google Gemini 2.0 AI with pedagogical principles to create a solver that teaches, not just solves.',
+      'We combined cutting-edge AI with pedagogical principles to create a solver that teaches, not just solves.',
     icon: Rocket,
     color: 'violet',
   },
@@ -92,7 +92,7 @@ const values = [
     icon: Brain,
     title: 'AI-Powered',
     description:
-      'Powered by Google Gemini 2.0 for accurate, context-aware mathematical reasoning.',
+      'Powered by MathLab AI for accurate, context-aware mathematical reasoning.',
     gradient: 'from-neon-green to-neon-cyan',
   },
 ];

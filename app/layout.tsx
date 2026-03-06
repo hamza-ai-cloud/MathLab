@@ -5,7 +5,7 @@ import '@/styles/globals.css';
 export const metadata: Metadata = {
   title: 'MathLab — AI-Powered Math Solver',
   description:
-    'Solve complex math problems with AI-powered step-by-step guidance. From algebra to calculus, powered by Gemini 2.0.',
+    'Solve complex math problems with AI-powered step-by-step guidance. From algebra to calculus, powered by MathLab AI.',
   keywords: ['math solver', 'AI', 'step by step', 'calculus', 'algebra', 'MathLab'],
 };
 
