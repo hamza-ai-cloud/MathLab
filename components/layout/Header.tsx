@@ -18,7 +18,7 @@ const navLinks = [
 export function Header() {
   const router = useRouter();
   const pathname = usePathname();
-  const { isLoggedIn, user, signInWithGoogle } = useAuth();
+  const { isLoggedIn } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   /* Close mobile menu on route change */
@@ -107,7 +107,7 @@ export function Header() {
                     variant="outline"
                     size="sm"
                     className="gap-2"
-                    onClick={signInWithGoogle}
+                    onClick={() => router.push('/auth')}
                   >
                     <Sparkles size={14} />
                     Try Free
@@ -122,7 +122,7 @@ export function Header() {
                 <Button
                   variant="primary"
                   size="sm"
-                  onClick={signInWithGoogle}
+                  onClick={() => router.push('/auth')}
                 >
                   Sign In
                 </Button>
@@ -227,7 +227,7 @@ export function Header() {
                       size="sm"
                       shimmer
                       className="w-full gap-2"
-                      onClick={() => { setMobileOpen(false); signInWithGoogle(); }}
+                      onClick={() => { setMobileOpen(false); router.push('/auth'); }}
                     >
                       <Sparkles size={14} />
                       Try Free
@@ -236,7 +236,7 @@ export function Header() {
                       variant="outline"
                       size="sm"
                       className="w-full"
-                      onClick={() => { setMobileOpen(false); signInWithGoogle(); }}
+                      onClick={() => { setMobileOpen(false); router.push('/auth'); }}
                     >
                       Sign In
                     </Button>

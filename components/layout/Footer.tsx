@@ -52,7 +52,7 @@ export function Footer() {
 
         <div className="border-t border-white/5 mt-12 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-slate-600">
-            &copy; 2024 MathLab. All rights reserved.
+            &copy; 2026 MathLab. All rights reserved.
           </p>
           <p className="text-xs text-slate-600">
             Built with ❤️ for students worldwide

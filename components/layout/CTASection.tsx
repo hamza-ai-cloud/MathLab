@@ -41,7 +41,7 @@ export function CTASection() {
                 size="lg"
                 shimmer
                 className="gap-2"
-                onClick={() => router.push('/solver')}
+                onClick={() => router.push('/auth')}
               >
                 <Sparkles size={18} />
                 Get Started Free
@@ -57,7 +57,7 @@ export function CTASection() {
           </div>
 
           <p className="text-xs text-slate-500 mt-6">
-            ✨ 10 free problems every day • No signup required
+            ✨ Free to get started • Sign up in seconds
           </p>
         </div>
       </motion.div>

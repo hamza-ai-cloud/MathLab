@@ -11,14 +11,14 @@ import { Brain, Sparkles, ArrowRight, Zap, ImageIcon, BookOpen, Play } from 'luc
 
 export function HeroSection() {
   const router = useRouter();
-  const { isLoggedIn, signInWithGoogle } = useAuth();
+  const { isLoggedIn } = useAuth();
   const [demoOpen, setDemoOpen] = useState(false);
 
   const handleStartSolving = () => {
     if (isLoggedIn) {
       router.push('/dashboard');
     } else {
-      signInWithGoogle();
+      router.push('/auth');
     }
   };
 
@@ -53,7 +53,7 @@ export function HeroSection() {
           <div className="glass rounded-full px-5 py-2 flex items-center gap-2 border border-electric/20">
             <Zap size={14} className="text-electric-light" />
             <span className="text-sm text-slate-300">
-              Powered by Gemini 2.0 AI
+              Powered by MathLab AI
             </span>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
           </div>
