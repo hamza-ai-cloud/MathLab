@@ -9,6 +9,37 @@ import type { User, Session } from '@supabase/supabase-js';
    Auth Context — Supabase (Email + OAuth)
    ════════════════════════════════════ */
 
+/**
+ * Race any promise against a timeout. If the original promise doesn't
+ * resolve/reject within `ms` milliseconds, the returned promise rejects
+ * with a clear timeout error. This prevents infinite hangs.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`[TIMEOUT] ${label} did not respond within ${ms / 1000}s. Check Supabase URL, anon key, and SMTP settings.`)), ms)
+    ),
+  ]);
+}
+
+/** Safely extract a readable message from any error shape */
+function extractErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  if (err && typeof err === 'object') {
+    const obj = err as Record<string, unknown>;
+    if (typeof obj.message === 'string' && obj.message) return obj.message;
+    if (typeof obj.msg === 'string' && obj.msg) return obj.msg;
+    if (typeof obj.error_description === 'string') return obj.error_description;
+    // Last resort: stringify, but flag if it's empty
+    const str = JSON.stringify(err);
+    if (str === '{}') return 'Unknown error (empty response from server). Check Supabase Dashboard logs → Auth → Logs.';
+    return str;
+  }
+  return 'Unknown error';
+}
+
 interface AuthUser {
   id: string;
   name: string;
@@ -109,16 +140,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /* ── Sign in with Email + Password ── */
   const signInWithEmail = useCallback(async (email: string, password: string): Promise<AuthResult> => {
+    console.log('[MathLab Auth] ▶ signInWithEmail called:', { email, hasPassword: !!password });
+    console.log('[MathLab Auth] ENV CHECK:', {
+      SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ? '✅ ' + process.env.NEXT_PUBLIC_SUPABASE_URL.substring(0, 30) + '...' : '❌ UNDEFINED',
+      ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? '✅ set (hidden)' : '❌ UNDEFINED',
+    });
+
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await withTimeout(
+        supabase.auth.signInWithPassword({ email, password }),
+        10000,
+        'signInWithPassword'
+      );
+
+      console.log('[MathLab Auth] signIn raw response:', { data: JSON.stringify(data), error: JSON.stringify(error) });
 
       if (error) {
-        // Debug log — always print the raw Supabase error so we can diagnose
-        console.error('[MathLab Auth] signInWithPassword error:', JSON.stringify(error, null, 2));
-
         const msg = (error.message || '').toLowerCase();
 
-        // Supabase returns "Email not confirmed" when the account exists but hasn't been verified
         if (msg.includes('email not confirmed') || msg.includes('not confirmed')) {
           return {
             error: 'Your email is not confirmed yet. Please check your inbox for the confirmation link, or click "Resend" below.',
@@ -126,80 +165,74 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           };
         }
 
-        // "Invalid login credentials" is Supabase's catch-all for wrong email OR wrong password
         if (msg.includes('invalid login credentials') || msg.includes('invalid credentials')) {
-          // Try a no-op signUp to see if the email exists at all
-          const { data: probe } = await supabase.auth.signUp({
-            email,
-            password: '__probe_only_never_match__',
-            options: { data: { _probe: true } },
-          });
-
-          // If identities is empty, the user exists — so it's a wrong password
-          if (probe?.user?.identities && probe.user.identities.length === 0) {
-            console.error('[MathLab Auth] User exists but password is wrong');
-            return {
-              error: 'Incorrect password. Please try again or use "Forgot Password?" to reset it.',
-              code: 'invalid_credentials',
-            };
-          }
-
-          // Otherwise the user doesn't exist
-          console.error('[MathLab Auth] No account found for this email');
           return {
-            error: 'No account found with this email. Please sign up first.',
-            code: 'user_not_found',
+            error: 'Invalid email or password. Please try again or use "Forgot Password?".',
+            code: 'invalid_credentials',
           };
         }
 
-        // Rate limit or any other error — always return a human-readable message
         if (msg.includes('rate limit') || msg.includes('too many requests')) {
           return { error: 'Too many attempts. Please wait a minute and try again.', code: 'unknown' };
         }
 
-        return { error: error.message || `Authentication failed (${error.status || 'unknown'})`, code: 'unknown' };
+        return { error: extractErrorMessage(error), code: 'unknown' };
       }
 
-      console.log('[MathLab Auth] Sign-in successful for:', data.user?.email);
+      console.log('[MathLab Auth] ✅ Sign-in successful for:', data.user?.email);
       return {};
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : JSON.stringify(err);
-      console.error('[MathLab Auth] signInWithEmail EXCEPTION:', message);
-      return { error: `Sign-in failed: ${message}`, code: 'unknown' };
+      const message = extractErrorMessage(err);
+      console.error('[MathLab Auth] ❌ signInWithEmail EXCEPTION:', message);
+      return { error: message, code: 'unknown' };
     }
   }, [supabase]);
 
   /* ── Sign up with Email + Password + Name ── */
   const signUpWithEmail = useCallback(async (email: string, password: string, fullName: string): Promise<AuthResult> => {
-    try {
-      console.log('[MathLab Auth] Attempting signUp for:', email, '| Name:', fullName);
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { full_name: fullName },
-          emailRedirectTo: `${getBaseUrl()}/auth/confirm`,
-        },
-      });
+    console.log('[MathLab Auth] ▶ signUpWithEmail called:', { email, fullName, passwordLength: password.length });
+    console.log('[MathLab Auth] ENV CHECK:', {
+      SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || '❌ UNDEFINED',
+      ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? '✅ set' : '❌ UNDEFINED',
+      SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || '❌ UNDEFINED',
+      emailRedirectTo: `${getBaseUrl()}/auth/confirm`,
+    });
 
-      // Debug: log the FULL response so we can always diagnose
-      console.log('[MathLab Auth] signUp response — data:', JSON.stringify(data, null, 2));
-      if (error) {
-        console.error('[MathLab Auth] signUp error:', JSON.stringify(error, null, 2));
-      }
+    try {
+      console.log('[MathLab Auth] Calling supabase.auth.signUp (10s timeout)...');
+      const startTime = Date.now();
+
+      const { data, error } = await withTimeout(
+        supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { full_name: fullName },
+            emailRedirectTo: `${getBaseUrl()}/auth/confirm`,
+          },
+        }),
+        10000,
+        'signUp'
+      );
+
+      const elapsed = Date.now() - startTime;
+      console.log(`[MathLab Auth] signUp responded in ${elapsed}ms`);
+      console.log('[MathLab Auth] signUp RAW data:', JSON.stringify(data, null, 2));
+      console.log('[MathLab Auth] signUp RAW error:', JSON.stringify(error, null, 2));
 
       if (error) {
         const msg = (error.message || '').toLowerCase();
+        console.error('[MathLab Auth] ❌ signUp error message:', JSON.stringify(error.message), '| status:', error.status, '| name:', error.name);
+
         if (msg.includes('already registered') || msg.includes('already been registered')) {
           return { error: 'This email is already registered. Please sign in instead.', code: 'already_registered' };
         }
-        if (msg.includes('rate limit') || msg.includes('too many requests') || msg.includes('email rate limit')) {
-          return { error: 'Email rate limit reached. Please wait a few minutes and try again, or check SMTP settings.', code: 'unknown' };
+        if (msg.includes('rate limit') || msg.includes('too many requests') || msg.includes('email rate limit') || msg.includes('email sending') || error.status === 429) {
+          return { error: 'Email rate limit reached. Please wait a few minutes and try again. If this persists, disable "Confirm Email" in Supabase → Auth → Providers to test.', code: 'unknown' };
         }
-        if (msg.includes('smtp') || msg.includes('email') && msg.includes('send')) {
-          return { error: `Email delivery failed: ${error.message}. Please verify SMTP settings in Supabase Dashboard.`, code: 'unknown' };
-        }
-        return { error: error.message || `Sign-up failed (status ${error.status || 'unknown'})`, code: 'unknown' };
+
+        // Catch-all: use extractErrorMessage to NEVER show {}
+        return { error: extractErrorMessage(error), code: 'unknown' };
       }
 
       // Supabase may return a user with no identities if the email already exists (no error thrown)
@@ -208,12 +241,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: 'This email is already registered. Please sign in instead.', code: 'already_registered' };
       }
 
-      console.log('[MathLab Auth] Sign-up successful, confirmation email sent to:', email);
+      console.log('[MathLab Auth] ✅ Sign-up successful, confirmation email sent to:', email);
       return {};
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : JSON.stringify(err);
-      console.error('[MathLab Auth] signUpWithEmail EXCEPTION:', message);
-      return { error: `Sign-up failed: ${message}`, code: 'unknown' };
+      const message = extractErrorMessage(err);
+      console.error('[MathLab Auth] ❌ signUpWithEmail EXCEPTION:', message);
+      return { error: message, code: 'unknown' };
     }
   }, [supabase]);
 
