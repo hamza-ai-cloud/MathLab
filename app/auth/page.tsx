@@ -114,13 +114,20 @@ function AuthPageContent() {
     /* ── Forgot password flow ── */
     if (mode === 'forgot') {
       setLoading(true);
-      const res = await resetPassword(email.trim());
-      if (res.error) {
-        setError(res.error);
-      } else {
-        setSuccess('Password reset link sent! Check your email inbox.');
+      try {
+        const res = await resetPassword(email.trim());
+        if (res.error) {
+          setError(res.error);
+        } else {
+          setSuccess('Password reset link sent! Check your email inbox.');
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : JSON.stringify(err);
+        console.error('[MathLab Auth Page] Forgot password exception:', msg);
+        setError(`Something went wrong: ${msg}`);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
       return;
     }
 
@@ -142,30 +149,36 @@ function AuthPageContent() {
     }
 
     setLoading(true);
-
-    if (mode === 'signup') {
-      const res = await signUpWithEmail(email.trim(), password, fullName.trim());
-      if (res.error) {
-        setError(res.error);
-      } else {
-        setSuccess('Account created! Check your email to confirm, then log in.');
-        setMode('login');
-        setPassword('');
-        setConfirmPassword('');
-      }
-    } else {
-      const res = await signInWithEmail(email.trim(), password);
-      if (res.error) {
-        setError(res.error);
-        // Show the resend confirmation button if email is not confirmed
-        if (res.code === 'email_not_confirmed') {
-          setShowResend(true);
+    try {
+      if (mode === 'signup') {
+        const res = await signUpWithEmail(email.trim(), password, fullName.trim());
+        if (res.error) {
+          setError(res.error);
+        } else {
+          setSuccess('Account created! Check your email to confirm, then log in.');
+          setMode('login');
+          setPassword('');
+          setConfirmPassword('');
         }
       } else {
-        router.push('/dashboard');
+        const res = await signInWithEmail(email.trim(), password);
+        if (res.error) {
+          setError(res.error);
+          // Show the resend confirmation button if email is not confirmed
+          if (res.code === 'email_not_confirmed') {
+            setShowResend(true);
+          }
+        } else {
+          router.push('/dashboard');
+        }
       }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : JSON.stringify(err);
+      console.error('[MathLab Auth Page] Submit exception:', msg);
+      setError(`Something went wrong: ${msg}`);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   /* ── Google sign-in ── */
